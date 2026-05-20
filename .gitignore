@@ -1,0 +1,32 @@
+# Large Data & Archives
+LungHist700.rar
+data/
+*.rar
+*.zip
+
+# PyTorch Model Weights & Data Splits
+*.pth
+*.pt
+
+# Python Environment & Cache
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Documentations & References
+s41597-024-03944-3.pdf
+
+# Logs & Outputs
+*.log
+*.json
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
