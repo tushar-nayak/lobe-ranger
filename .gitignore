@@ -30,3 +30,8 @@ s41597-024-03944-3.pdf
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Root-level temporary XAI images
+/xai_malignant_sample.png
+/xai_normal_sample.png
+
