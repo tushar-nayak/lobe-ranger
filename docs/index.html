@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lobe Ranger: Multi-Scale Ordinal Pathology Foundation Network</title>
+    <meta
+      name="description"
+      content="Lobe Ranger is an advanced deep learning framework for multi-scale lung histopathology classification on LungHist700, featuring a shared ViT backbone, bidirectional cross-scale attention fusion, and ordinal grading."
+    >
+    <link rel="stylesheet" href="styles.css?v=1">
+  </head>
+  <body>
+    <header>
+      <div class="wrap hero">
+        <p class="eyebrow">Advanced Medical Computer Vision Project</p>
+        <h1>Lobe Ranger: Multi-Scale Ordinal Pathology Foundation Network</h1>
+        <p class="lead">
+          A novel deep learning framework designed to process paired 20x and 40x whole-slide histopathological images from the <b>LungHist700</b> dataset. Leverages a pre-trained pathology-tuned transformer backbone combined with custom bidirectional cross-scale attention fusion to simultaneously classify malignancy, carcinoma subtype (ACA vs. SCC), and ordinal tumor differentiation grade.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/tushar-nayak/lobe-ranger">View Repository</a>
+          <a class="button" href="https://github.com/tushar-nayak/lobe-ranger/blob/main/walkthrough.md">Model Walkthrough</a>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <b>98.36%</b>
+            <span>Malignancy Accuracy (Task A)</span>
+          </div>
+          <div class="metric">
+            <b>0.9720</b>
+            <span>Malignancy ROC-AUC</span>
+          </div>
+          <div class="metric">
+            <b>56.78%</b>
+            <span>Subtype Accuracy (Task B)</span>
+          </div>
+          <div class="metric">
+            <b>0.342</b>
+            <span>Ordinal Grade MAE (grades)</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <div class="wrap">
+          <h2>Bidirectional Cross-Scale Attention Fusion</h2>
+          <p class="section-intro">
+            Lobe Ranger (MOPFN) integrates global tissue architecture (20x) and detailed cell cytology (40x) to mimic a pathologist's workflow of zooming in and out under the microscope.
+          </p>
+          <div class="architecture">
+            <div class="arch-card">
+              <span class="arch-step">1</span>
+              <h3>Shared ViT-B Backbone</h3>
+              <p>
+                Leverages a robust Vision Transformer (ViT-B/16) pre-trained backbone, freezing early encoder blocks to preserve high-level representations while reducing training footprints.
+              </p>
+            </div>
+            <div class="arch-card">
+              <span class="arch-step">2</span>
+              <h3>Multi-Scale Image Pairing</h3>
+              <p>
+                Patient-wise matches 20x macro-structural and 40x micro-cytological tissue patches, capturing multi-resolution spatial features without heavy downsampling.
+              </p>
+            </div>
+            <div class="arch-card">
+              <span class="arch-step">3</span>
+              <h3>Bidirectional Attention</h3>
+              <p>
+                Enables information exchange between scales: the 20x branch queries the 40x branch for fine cytologic details, and the 40x branch queries 20x for wider contextual layout.
+              </p>
+            </div>
+            <div class="arch-card">
+              <span class="arch-step">4</span>
+              <h3>Hierarchical Ordinal Heads</h3>
+              <p>
+                Multi-task heads predict binary malignancy, subtype (masked for normal), and ordinal differentiation grade using Consistent Ordinal Regression (CORAL).
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="xai">
+        <div class="wrap">
+          <h2>Explainable AI (XAI) & Interpretability</h2>
+          <p class="section-intro">
+            Clinical validation is achieved via gradient-weighted input saliency mapping, visualizing exactly where Lobe Ranger focuses to make its malignancy predictions.
+          </p>
+          <div class="gallery">
+            <div class="panel image-frame">
+              <img src="xai_malignant_sample.png" alt="Malignant Case Saliency Map Focus">
+              <figcaption>
+                <b>Malignant Case (Adenocarcinoma / Squamous Cell Carcinoma) Saliency Mapping</b>: Highlights prominent diagnostic regions including atypical nuclear boundaries, pleomorphic nucleoli, and multi-cellular nests.
+              </figcaption>
+            </div>
+            <div class="panel image-frame">
+              <img src="xai_normal_sample.png" alt="Normal Sample Saliency Map Focus">
+              <figcaption>
+                <b>Normal Pulmonary Structure Saliency Mapping</b>: Focuses on normal alveolar walls and architectural layouts, confirming that normal landmarks do not trigger false positive neoplastic scores.
+              </figcaption>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="results">
+        <div class="wrap">
+          <h2>Quantitative Evaluation Results</h2>
+          <p class="section-intro">
+            Classification performance evaluated on the isolated patient-wise test split using our custom Stratified Patient Splitter.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Evaluation Task</th>
+                  <th>Metric Name</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>Task A: Malignancy Detection</b> (Normal vs. Tumor)</td>
+                  <td>Accuracy</td>
+                  <td>98.36%</td>
+                </tr>
+                <tr>
+                  <td><b>Task A: Malignancy Detection</b> (Normal vs. Tumor)</td>
+                  <td>F1-Score</td>
+                  <td>99.17%</td>
+                </tr>
+                <tr>
+                  <td><b>Task A: Malignancy Detection</b> (Normal vs. Tumor)</td>
+                  <td>ROC-AUC</td>
+                  <td>0.9720</td>
+                </tr>
+                <tr class="highlight">
+                  <td><b>Task B: Carcinoma Subtype</b> (ACA vs. SCC)</td>
+                  <td>Accuracy</td>
+                  <td>56.78%</td>
+                </tr>
+                <tr class="highlight">
+                  <td><b>Task B: Carcinoma Subtype</b> (ACA vs. SCC)</td>
+                  <td>Macro F1-Score</td>
+                  <td>36.66%</td>
+                </tr>
+                <tr>
+                  <td><b>Task C: Ordinal Differentiation</b> (Well -> Mod -> Poor)</td>
+                  <td>Accuracy</td>
+                  <td>65.76%</td>
+                </tr>
+                <tr>
+                  <td><b>Task C: Ordinal Differentiation</b> (Well -> Mod -> Poor)</td>
+                  <td>Mean Absolute Error (MAE)</td>
+                  <td>0.342 grades</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="caption">*Note: Task B and Task C metrics are masked out during training and evaluation on normal cases, and computed exclusively for malignant pathology samples.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap">
+        <p>Lobe Ranger: Multi-Scale Ordinal Pathology Foundation Network is licensed under the MIT License.</p>
+        <p>Built for the LungHist700 histopathology dataset using PyTorch, MPS, and custom multi-head cross-attention. &copy; 2026 Tushar Nayak.</p>
+      </div>
+    </footer>
+  </body>
+</html>
