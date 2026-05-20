@@ -92,35 +92,43 @@ class MOPFN(nn.Module):
             nn.Linear(embed_dim // 2, num_diff_classes - 1) # 2 binary outputs
         )
 
+    def _extract_vit_tokens(self, x):
+        # Reshape and permute the input tensor via ViT projection
+        x = self.backbone._process_input(x) # [batch_size, 196, 768]
+        n = x.shape[0]
+
+        # Expand the class token to the full batch
+        batch_class_token = self.backbone.class_token.expand(n, -1, -1)
+        x = torch.cat([batch_class_token, x], dim=1) # [batch_size, 197, 768]
+
+        # Pass through the transformer encoder blocks
+        x = self.backbone.encoder(x) # [batch_size, 197, 768]
+        return x
+
     def forward(self, img_20x, img_40x, return_attention=False):
         # img_20x: [batch_size, 3, 224, 224]
         # img_40x: [batch_size, 3, 224, 224]
         
-        # 1. Feature Extraction via Shared ViT
-        feat_20x = self.backbone(img_20x) # [batch_size, 768]
-        feat_40x = self.backbone(img_40x) # [batch_size, 768]
-        
-        # Add a dummy sequence dimension for nn.MultiheadAttention [batch_size, 1, 768]
-        feat_20x_seq = feat_20x.unsqueeze(1)
-        feat_40x_seq = feat_40x.unsqueeze(1)
+        # 1. Feature Extraction via Shared ViT (extract all 197 tokens)
+        feat_20x_seq = self._extract_vit_tokens(img_20x) # [batch_size, 197, 768]
+        feat_40x_seq = self._extract_vit_tokens(img_40x) # [batch_size, 197, 768]
         
         # 2. Bidirectional Cross-Scale Attention
         if return_attention:
             # 20x queries 40x (macro-structure guided by cytologic details)
-            f_20_40, attn_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq, return_attn=True) # [batch_size, 1, 768]
+            f_20_40, attn_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq, return_attn=True) # [batch_size, 197, 768]
             # 40x queries 20x (micro-cytology guided by architectural context)
-            f_40_20, attn_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq, return_attn=True) # [batch_size, 1, 768]
+            f_40_20, attn_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq, return_attn=True) # [batch_size, 197, 768]
         else:
             f_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq)
             f_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq)
         
-        # Squeeze sequence dimension
-        f_20_40 = f_20_40.squeeze(1) # [batch_size, 768]
-        f_40_20 = f_40_20.squeeze(1) # [batch_size, 768]
+        # Concatenate and project at token level
+        fused = torch.cat([f_20_40, f_40_20], dim=-1) # [batch_size, 197, 1536]
+        fused_seq = self.fusion_proj(fused) # [batch_size, 197, 768]
         
-        # Concatenate and project
-        fused = torch.cat([f_20_40, f_40_20], dim=-1) # [batch_size, 1536]
-        fused_representation = self.fusion_proj(fused) # [batch_size, 768]
+        # Pool: Extract the CLS token representation at index 0
+        fused_representation = fused_seq[:, 0] # [batch_size, 768]
         
         # 3. Forward through Multi-Task Heads
         logits_malignancy = self.malignancy_head(fused_representation) # [batch_size, 2]
@@ -138,6 +146,7 @@ class MOPFN(nn.Module):
             out['attn_40_20'] = attn_40_20
             
         return out
+
 
 class CoralOrdinalLoss(nn.Module):
     """

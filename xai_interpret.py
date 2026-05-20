@@ -111,9 +111,26 @@ def main():
         device = torch.device("cpu")
         
     model_path = "best_mopfn.pth"
-    csv_path = "data/data/data.csv"
-    data_dir = "data/data"
+    csv_path = "data/LungHist700/LungHist700.csv"
+    data_dir = "data/LungHist700"
     
+    # Auto-resolve metadata paths if nested differently
+    if not os.path.exists(csv_path):
+        found_csv = False
+        for root, dirs, files in os.walk("data"):
+            for file in files:
+                if file.endswith(".csv") and "lunghist" in file.lower():
+                    csv_path = os.path.join(root, file)
+                    data_dir = root
+                    found_csv = True
+                    print(f"Auto-resolved metadata path to: {csv_path}")
+                    break
+            if found_csv:
+                break
+        if not found_csv:
+            print("Error: Could not find CSV metadata. Please run download_data.py first.")
+            return
+            
     if not os.path.exists(model_path):
         print(f"Error: Model weights not found at {model_path}. Please train first.")
         return
