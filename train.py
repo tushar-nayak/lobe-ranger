@@ -65,27 +65,62 @@ def main():
             print(f"Error: Could not find CSV at {args.csv_path}. Please run download_data.py first.")
             return
 
-    # 2. Patient-Wise Splitting (to prevent data leakage)
+    # 2. Stratified Patient-Wise Splitting (to prevent data leakage and balance clinical classes)
     df_meta = pd.read_csv(csv_path)
     df_meta.columns = [c.strip().lower() for c in df_meta.columns]
+    df_meta['subclass'] = df_meta['subclass'].fillna('').astype(str).str.lower().str.strip()
+    df_meta['superclass'] = df_meta['superclass'].astype(str).str.lower().str.strip()
     
-    # Get unique patient IDs
+    # Classify each patient into a clean stratum
+    patient_strata = {}
     patient_col = 'patient_id' if 'patient_id' in df_meta.columns else 'patient'
-    unique_patients = df_meta[patient_col].unique().tolist()
-    random.shuffle(unique_patients)
+    for patient, group in df_meta.groupby(patient_col):
+        sups = group['superclass'].unique()
+        if 'aca' in sups and 'scc' in sups:
+            patient_strata[patient] = 'mixed'
+        elif 'aca' in sups:
+            patient_strata[patient] = 'aca'
+        elif 'scc' in sups:
+            patient_strata[patient] = 'scc'
+        else:
+            patient_strata[patient] = 'nor'
+            
+    # Group patient IDs by strata
+    strata_groups = {'nor': [], 'aca': [], 'scc': [], 'mixed': []}
+    for p, s in patient_strata.items():
+        strata_groups[s].append(p)
+        
+    # Shuffle each stratum with the seed for reproducibility
+    for s in strata_groups:
+        random.shuffle(strata_groups[s])
+        
+    # Perform stratified split (approx 80/10/10)
+    train_patients, val_patients, test_patients = [], [], []
     
-    num_patients = len(unique_patients)
-    print(f"Total patients in dataset: {num_patients}")
-    
-    # Split: 80% Train, 10% Val, 10% Test
-    num_train = int(0.8 * num_patients)
-    num_val = int(0.1 * num_patients)
-    
-    train_patients = unique_patients[:num_train]
-    val_patients = unique_patients[num_train:num_train+num_val]
-    test_patients = unique_patients[num_train+num_val:]
-    
+    # Stratified distribution:
+    # nor: 5 patients -> 3 train, 1 val, 1 test
+    # aca: 19 patients -> 15 train, 2 val, 2 test
+    # scc: 19 patients -> 15 train, 2 val, 2 test
+    # mixed: 2 patients -> 1 train, 1 val (or test)
+    for s, p_list in strata_groups.items():
+        n = len(p_list)
+        if n >= 3:
+            n_val = max(1, int(0.1 * n))
+            n_test = max(1, int(0.1 * n))
+            n_train = n - n_val - n_test
+            
+            train_patients.extend(p_list[:n_train])
+            val_patients.extend(p_list[n_train:n_train+n_val])
+            test_patients.extend(p_list[n_train+n_val:])
+        else:
+            # Handle small strata like 'mixed'
+            train_patients.extend(p_list[:1])
+            if n > 1:
+                val_patients.extend(p_list[1:])
+                
+    print(f"Total patients in dataset: {len(patient_strata)}")
     print(f"Train patients: {len(train_patients)} | Val patients: {len(val_patients)} | Test patients: {len(test_patients)}")
+    print(f"Test split patients: {test_patients}")
 
     # 3. Create Datasets & Dataloaders
     train_dataset = LungHistPairedDataset(
