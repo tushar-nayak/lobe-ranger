@@ -25,15 +25,16 @@ class CrossScaleAttention(nn.Module):
 
 class MOPFN(nn.Module):
     """
-    Multi-Scale Ordinal Pathology Foundation Network (MOPFN).
-    Processes paired 20x and 40x pathology images using a shared ViT backbone,
-    fuses them via bidirectional cross-attention, and classifies them across
+    Multi-Scale Ordinal Pathology Fusion Network (MOPFN).
+    Processes pathology images using a shared ImageNet pre-trained ViT-B/16 backbone,
+    supports various scale-fusion architectures, and classifies them across
     three clinical multi-task heads (Malignancy, Subtype, Ordinal Differentiation).
     """
-    def __init__(self, embed_dim=768, num_heads=4, num_diff_classes=3, pretrained=True):
+    def __init__(self, embed_dim=768, num_heads=4, num_diff_classes=3, pretrained=True, fusion_mode='mopfn'):
         super().__init__()
+        self.fusion_mode = fusion_mode
         
-        # 1. Shared Vision Transformer Backbone
+        # 1. Shared Vision Transformer Backbone (ImageNet Pre-trained ViT-B/16)
         # vit_b_16 expects input size 224x224 and yields 768-dim embeddings
         if pretrained:
             weights = ViT_B_16_Weights.DEFAULT
@@ -42,26 +43,38 @@ class MOPFN(nn.Module):
             self.backbone = models.vit_b_16()
             
         # Extract features (exclude the default classification head of the ViT model)
-        # We will extract the CLS token representation from the ViT's encoder
         self.backbone.heads = nn.Identity()
         
-        # Optional: freeze backbone early layers to speed up training & protect representations
-        # We freeze the first 6 encoder blocks of the 12 blocks in ViT-B
-        for i, param in enumerate(self.backbone.parameters()):
-            if i < 80: # Freeze early layers
-                param.requires_grad = False
+        # Freeze the entire backbone to make training extremely fast and prevent representation collapse
+        for param in self.backbone.parameters():
+            param.requires_grad = False
 
-        # 2. Bidirectional Cross-Scale Attention Fusion
-        self.cross_attn_20_40 = CrossScaleAttention(embed_dim, num_heads)
-        self.cross_attn_40_20 = CrossScaleAttention(embed_dim, num_heads)
-        
-        # Projection layer after concatenating the two fused branches
-        self.fusion_proj = nn.Sequential(
-            nn.Linear(embed_dim * 2, embed_dim),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.LayerNorm(embed_dim)
-        )
+        # 2. Setup Fusion Layers based on Mode
+        if self.fusion_mode == 'mopfn':
+            self.cross_attn_20_40 = CrossScaleAttention(embed_dim, num_heads)
+            self.cross_attn_40_20 = CrossScaleAttention(embed_dim, num_heads)
+            
+            # Projection layer after concatenating the two fused branches
+            self.fusion_proj = nn.Sequential(
+                nn.Linear(embed_dim * 2, embed_dim),
+                nn.GELU(),
+                nn.Dropout(0.2),
+                nn.LayerNorm(embed_dim)
+            )
+        elif self.fusion_mode == 'late_fusion':
+            self.fusion_proj = nn.Sequential(
+                nn.Linear(embed_dim * 2, embed_dim),
+                nn.GELU(),
+                nn.Dropout(0.2),
+                nn.LayerNorm(embed_dim)
+            )
+        elif self.fusion_mode == 'concat_fusion':
+            self.fusion_proj = nn.Sequential(
+                nn.Linear(embed_dim, embed_dim),
+                nn.GELU(),
+                nn.Dropout(0.2),
+                nn.LayerNorm(embed_dim)
+            )
         
         # 3. Multi-Task Classification Heads
         # Head A: Malignancy (0 = Normal, 1 = Carcinoma)
@@ -110,26 +123,47 @@ class MOPFN(nn.Module):
         # img_40x: [batch_size, 3, 224, 224]
         
         # 1. Feature Extraction via Shared ViT (extract all 197 tokens)
-        feat_20x_seq = self._extract_vit_tokens(img_20x) # [batch_size, 197, 768]
-        feat_40x_seq = self._extract_vit_tokens(img_40x) # [batch_size, 197, 768]
-        
-        # 2. Bidirectional Cross-Scale Attention
-        if return_attention:
-            # 20x queries 40x (macro-structure guided by cytologic details)
-            f_20_40, attn_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq, return_attn=True) # [batch_size, 197, 768]
-            # 40x queries 20x (micro-cytology guided by architectural context)
-            f_40_20, attn_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq, return_attn=True) # [batch_size, 197, 768]
-        else:
-            f_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq)
-            f_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq)
-        
-        # Concatenate and project at token level
-        fused = torch.cat([f_20_40, f_40_20], dim=-1) # [batch_size, 197, 1536]
-        fused_seq = self.fusion_proj(fused) # [batch_size, 197, 768]
-        
-        # Pool: Extract the CLS token representation at index 0
-        fused_representation = fused_seq[:, 0] # [batch_size, 768]
-        
+        if self.fusion_mode == '20x_only':
+            feat_seq = self._extract_vit_tokens(img_20x)
+            fused_representation = feat_seq[:, 0] # [batch_size, 768]
+        elif self.fusion_mode == '40x_only':
+            feat_seq = self._extract_vit_tokens(img_40x)
+            fused_representation = feat_seq[:, 0] # [batch_size, 768]
+        elif self.fusion_mode == 'late_fusion':
+            feat_20x_seq = self._extract_vit_tokens(img_20x)
+            feat_40x_seq = self._extract_vit_tokens(img_40x)
+            c_20 = feat_20x_seq[:, 0]
+            c_40 = feat_40x_seq[:, 0]
+            c_fused = torch.cat([c_20, c_40], dim=-1) # [batch_size, 1536]
+            fused_representation = self.fusion_proj(c_fused) # [batch_size, 768]
+        elif self.fusion_mode == 'concat_fusion':
+            feat_20x_seq = self._extract_vit_tokens(img_20x)
+            feat_40x_seq = self._extract_vit_tokens(img_40x)
+            # Concatenate along token sequence dimension
+            seq_fused = torch.cat([feat_20x_seq, feat_40x_seq], dim=1) # [batch_size, 394, 768]
+            c_fused = seq_fused.mean(dim=1) # Global average pooling -> [batch_size, 768]
+            fused_representation = self.fusion_proj(c_fused) # [batch_size, 768]
+        else: # mopfn (cross-attention)
+            feat_20x_seq = self._extract_vit_tokens(img_20x) # [batch_size, 197, 768]
+            feat_40x_seq = self._extract_vit_tokens(img_40x) # [batch_size, 197, 768]
+            
+            # Bidirectional Cross-Scale Attention
+            if return_attention:
+                # 20x queries 40x (macro-structure guided by cytologic details)
+                f_20_40, attn_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq, return_attn=True) # [batch_size, 197, 768]
+                # 40x queries 20x (micro-cytology guided by architectural context)
+                f_40_20, attn_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq, return_attn=True) # [batch_size, 197, 768]
+            else:
+                f_20_40 = self.cross_attn_20_40(feat_20x_seq, feat_40x_seq)
+                f_40_20 = self.cross_attn_40_20(feat_40x_seq, feat_20x_seq)
+            
+            # Concatenate and project at token level
+            fused = torch.cat([f_20_40, f_40_20], dim=-1) # [batch_size, 197, 1536]
+            fused_seq = self.fusion_proj(fused) # [batch_size, 197, 768]
+            
+            # Pool: Extract the CLS token representation at index 0
+            fused_representation = fused_seq[:, 0] # [batch_size, 768]
+            
         # 3. Forward through Multi-Task Heads
         logits_malignancy = self.malignancy_head(fused_representation) # [batch_size, 2]
         logits_subtype = self.subtype_head(fused_representation)       # [batch_size, 2]
@@ -141,7 +175,7 @@ class MOPFN(nn.Module):
             'ordinal': logits_ordinal
         }
         
-        if return_attention:
+        if self.fusion_mode == 'mopfn' and return_attention:
             out['attn_20_40'] = attn_20_40
             out['attn_40_20'] = attn_40_20
             
