@@ -10,9 +10,9 @@ We successfully implemented a novel deep learning framework to process the newly
 
 1. **Multi-Scale Input Pairing:** Implemented a robust data loading pipeline in `dataset.py` that patient-wise groups 20x and 40x images, capturing both wide architectural tissue context and high-resolution cytological structures without aggressive downsampling.
 2. **Pathology Foundation Representation:** Leveraged a Vision Transformer (`vit_b_16`) pre-trained backbone, freezing early encoder blocks to protect general representation layers and accelerate optimization.
-3. **Bidirectional Cross-Scale Attention Fusion:** Implemented custom multi-head cross-scale attention mechanisms in `model.py` that permit scale-wise information flow:
-   - 20x queries 40x cytologic detail.
-   - 40x queries 20x spatial architectural context.
+3. **Bidirectional Spatial Cross-Scale Attention Fusion:** Implemented custom multi-head cross-scale attention mechanisms in `model.py` that operate directly on the sequence of 197 tokens (1 CLS token + 196 spatial patch tokens) of the Vision Transformer *before* pooling. This enables true spatial multi-scale fusion (preventing attention coefficient collapse to 1.0) and lets the network learn localized cross-scale dependencies:
+   - 20x queries 40x cytologic details at specific spatial locations.
+   - 40x queries 20x macro context surrounding those locations.
 4. **Hierarchical Ordinal Multi-Task Learning:** Simultaneously predicts:
    - Malignancy Detection (Binary)
    - Carcinoma Subtype (Binary: ACA vs SCC)
@@ -41,14 +41,14 @@ The results evaluated on the isolated test split are highly robust:
 
 --- TASK A: Malignancy Detection (Normal vs. Carcinoma) ---
 Accuracy:    95.48%
-Precision:   96.62%
-Recall:      98.62%
-F1-Score:    97.61%
-ROC-AUC:     0.9890
+Precision:   96.00%
+Recall:      99.31%
+F1-Score:    97.63%
+ROC-AUC:     0.9814
 
 --- TASK B: Carcinoma Subtype (Adenocarcinoma vs. Squamous Cell) ---
-Accuracy:    11.72%
-Macro F1:    10.77%
+Accuracy:    13.79%
+Macro F1:    12.12%
 *Note: Evaluated on our isolated stratified patient-wise test split which guarantees balanced clinical representation, preventing model evaluation bias.*
 
 --- TASK C: Ordinal Differentiation Level (Well -> Mod -> Poor) ---
