@@ -8,7 +8,7 @@
 
 ---
 
-## 🔬 Core Novel Architecture
+## Core Novel Architecture
 
 Traditional histopathology models often downsample high-resolution images, destroying critical diagnostic structures. **Lobe Ranger** solves this with a unified three-pillar framework:
 
@@ -32,7 +32,7 @@ Traditional histopathology models often downsample high-resolution images, destr
 
 ---
 
-## 🚀 Setup & Execution
+## Setup and Execution
 
 ### 1. Environment Activation
 Activate the pre-configured conda environment:
@@ -61,7 +61,7 @@ python evaluate.py --csv_path data/data/data.csv --data_dir data/data
 
 ---
 
-## 📊 Performance Benchmark
+## Performance Benchmark
 
 Evaluated on an isolated patient-wise test split (80/10/10) to prevent patient data leakage:
 
@@ -71,21 +71,21 @@ Evaluated on an isolated patient-wise test split (80/10/10) to prevent patient d
 | | F1-Score | **99.17%** | |
 | | ROC-AUC | **0.9720** | |
 | **Subtype Classification**| Accuracy | **56.78%** | Adenocarcinoma vs. Squamous Cell |
-| **Differentiation Grade** | Accuracy | **65.76%** | Ordinal Grade (Well ➔ Moderate ➔ Poor) |
+| **Differentiation Grade** | Accuracy | **65.76%** | Ordinal Grade (Well -> Moderate -> Poor) |
 | | Mean Absolute Error (MAE) | **0.342 grades** | Average distance from true grade |
 
 ---
 
-## 🧠 Explainability Audit (Cross-Scale Attention)
+## Explainability Audit (Cross-Scale Attention)
 
 Lobe Ranger audits how information flows between scales:
-* **20x ➔ 40x:** Guides spatial architectural views using cytologic details.
-* **40x ➔ 20x:** Guides cytological details using global spatial context.
+* **20x -> 40x:** Guides spatial architectural views using cytologic details.
+* **40x -> 20x:** Guides cytological details using global spatial context.
 
 > [!NOTE]
 > **Theoretical Observation:** Since cross-scale attention is computed on global CLS representations (sequence length = 1), attention weights mathematically converge to `1.0000`. To enable spatially resolved patch-level attention map audits, cross-attention layers should be situated before global CLS token pooling.
 
 ---
 
-## 📜 License
+## License
 This repository is licensed under the MIT License.
